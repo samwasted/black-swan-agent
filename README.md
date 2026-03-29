@@ -207,6 +207,7 @@ Supports dynamic parameterization across standard implementations:
 
 *Note: All signals strictly enforce **t+1 execution lag** to eliminate lookahead bias.*
 <img width="2560" height="1442" alt="image" src="https://github.com/user-attachments/assets/7f04dd24-e241-4b58-b017-fa299cf68815" />
+<img width="2560" height="1442" alt="image" src="https://github.com/user-attachments/assets/85f046d5-ea30-4762-b666-fdba80976d01" />
 
 ### Finnhub News Fetch Support
 Black Swan supports recent news ingestion through Finnhub and attaches headlines to the report context.
