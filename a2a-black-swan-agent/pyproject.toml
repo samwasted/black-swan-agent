@@ -19,6 +19,7 @@ dependencies = [
     "yfinance>=0.2.30",
     "pandas-ta>=0.3.14",
     "optuna>=3.4.0",
+    "numba>=0.59.0",
 ]
 
 [tool.hatch.build.targets.wheel]

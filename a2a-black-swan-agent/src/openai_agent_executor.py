@@ -39,6 +39,8 @@ class OpenAIAgentExecutor(AgentExecutor):
         )
         self.model = 'gpt-4o-mini'
         self.system_prompt = system_prompt
+        # In-memory history cache to preserve conversation state across API boundaries
+        self._history_cache: dict[str, list[dict[str, Any]]] = {}
 
     async def _process_request(
         self,
@@ -46,10 +48,18 @@ class OpenAIAgentExecutor(AgentExecutor):
         context: RequestContext,
         task_updater: TaskUpdater,
     ) -> None:
-        messages = [
-            {'role': 'system', 'content': self.system_prompt},
-            {'role': 'user', 'content': message_text},
-        ]
+        context_id = getattr(context, 'context_id', 'default_context')
+        
+        # Load existing history or initialize a new one with the system prompt
+        if context_id not in self._history_cache:
+            self._history_cache[context_id] = [
+                {'role': 'system', 'content': self.system_prompt}
+            ]
+            
+        messages = self._history_cache[context_id].copy()
+
+        # Append the new user message
+        messages.append({'role': 'user', 'content': message_text})
 
         # Convert tools to OpenAI format
         openai_tools = []
@@ -153,6 +163,10 @@ class OpenAIAgentExecutor(AgentExecutor):
                     parts = [TextPart(text=message.content)]
                     logger.debug(f'Yielding final response: {parts}')
                     await task_updater.add_artifact(parts)
+                    
+                    # Persist final state back to the cache!
+                    self._history_cache[context_id] = messages
+                    
                     await task_updater.complete()
                 break
 
