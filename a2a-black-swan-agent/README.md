@@ -86,6 +86,82 @@ LLM Summary Formulation -> User
 
 ---
 
+## 🛤 Implementation Step-by-Step Workflow
+
+Black Swan's execution pipeline is highly deterministic. When a user requests a stress test, the system performs the following sequence of operations:
+
+```mermaid
+graph TD
+    A[User Chat Request] -->|Extracted by LLM| B{Confirm Params?}
+    B -->|User Replies Yes| C(yFinance Data Fetch)
+    C --> D[pandas-ta Strategy Parameterization]
+    D --> E((Walk-Forward Optimization))
+    
+    subgraph Quant Toolset Engine
+    E --> F{Apply Constraints}
+    F -->|Commission/Slippage| G(Execution Cost Modeling)
+    F -->|Capital Gains| H(Tax Regiment Simulation)
+    G & H --> I((Monte Carlo Labs))
+    end
+    
+    subgraph External Context
+    B -->|Async Fetch| J[Finnhub News Engine]
+    end
+
+    I --> K[Synthesize Metrics]
+    J --> K
+    K --> L(LLM Generates Markdown Report)
+    L --> Z[Report Delivered to User]
+
+    classDef core fill:#1f2937,stroke:#3b82f6,color:#fff
+    classDef opt fill:#111827,stroke:#10b981,color:#fff
+    classDef LLM fill:#4b5563,stroke:#a855f7,color:#fff
+
+    class C,D,G,H,I,K core
+    class E opt
+    class A,B,L LLM
+```
+
+1. **Intent Extraction (LLM Routing)**
+   - The user inputs a strategy query (e.g., *"Run robustness on AAPL SMA for 2 Years"*).
+   - The LLM parses the natural language to extract the ticker, strategy type, optimization ranges, execution costs (slippage/fees), and applicable tax regimes.
+   - It prompts the user for a final Yes/No confirmation.
+
+2. **Market Data Fetch (`yfinance`)**
+   - Upon confirmation, the agent triggers the `QuantToolset`. 
+   - Uses the Yahoo Finance API to reliably download raw `Open, High, Low, Close, Volume` (OHLCV) price data for the requested historical window.
+
+3. **Strategy Generation (`pandas-ta`)**
+   - The engine validates the strategy string against local indicator mapping.
+   - Technical conditions are parameterized dynamically entirely in memory before executing the backtest loop, ensuring clean vector math mappings.
+
+4. **Walk-Forward Optimization (`optuna`)**
+   - The timeline is sliced into rolling **Train (6-m)** and **Test (1-m)** windows.
+   - Inside each Train block, Optuna runs 150 trials evaluating permutations of the strategy parameters to maximize *Sharpe minus (2 × Max Drawdown)*.
+   - The "winning" parameters from the Train block are locked and strictly traded out-of-sample over the consecutive Test block. 
+   - This process loops recursively through the dataset to construct the final Out-of-Sample (OOS) equity curve.
+
+5. **Execution Modeling (Slippage, Fees, Taxes)**
+   - Trades identified on the OOS curve are subjected to realistic friction.
+   - Percentage-based commissions and slippage are deducted mathematically at transaction nodes.
+   - A tax-engine traverses all capital gains mapped against standard short-term / long-term capital tax rules relative to local jurisdictions (US, UK, India).
+
+6. **Adversarial Stress Lab (`monte-carlo`)**
+   - The net-equity curve is attacked mathematically.
+   - Connectivity disruption (force-dropping 20% of trades).
+   - Sequence risk via Monte Carlo trade permutation shuffling.
+   - 100 iterations of Gaussian Geometric Brownian Motion (GBM) to test strategy breakdown outside historical paths.
+
+7. **Contextual Intelligence (`Finnhub API`)**
+   - In parallel with math simulations, Finnhub's `company-news` endpoint fetches verified journalistic headlines for the asset spanning the most recent trailing 14-days.
+   - Explicit diagnostics track symbol mapping errors alongside valid headlines to prevent hallucinations.
+
+8. **Risk Report Synthesis**
+   - All extracted statistics—WFO OOS returns, VaR/CVaR, fat-tail risk (Kurtosis), Monte Carlo quantiles, and Finnhub headlines—are packed back up the chain.
+   - The LLM generates a mathematically grounded, Markdown-formatted diagnostic report cross-referencing systemic strategy risks against recent market headlines.
+
+---
+
 ## ⚡ Quick Start
 
 ```bash
