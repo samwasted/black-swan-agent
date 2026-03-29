@@ -91,25 +91,26 @@ LLM Summary Formulation -> User
 Black Swan's execution pipeline is highly deterministic. When a user requests a stress test, the system performs the following sequence of operations:
 
 ```mermaid
-graph LR
+graph TD
     A[User Chat Request] -->|Extracted by LLM| B{Confirm Params?}
+    
     B -->|User Replies Yes| C(yFinance Data Fetch)
+    B -.->|Async Fetch| J[Finnhub News Engine]
+    
     C --> D[pandas-ta Strategy Parameterization]
     D --> E((Walk-Forward Optimization))
     
     subgraph Quant Toolset Engine
-    E --> F{Apply Constraints}
-    F -->|Commission/Slippage| G(Execution Cost Modeling)
-    F -->|Capital Gains| H(Tax Regiment Simulation)
-    G & H --> I((Monte Carlo Labs))
-    end
-    
-    subgraph External Context
-    B -->|Async Fetch| J[Finnhub News Engine]
+        direction LR
+        E --> F{Apply Constraints}
+        F --> G(Execution Cost Modeling)
+        F --> H(Tax Regiment Simulation)
+        G & H --> I((Monte Carlo Labs))
     end
 
     I --> K[Synthesize Metrics]
-    J --> K
+    J -.-> K
+    
     K --> L(LLM Generates Markdown Report)
     L --> Z[Report Delivered to User]
 
