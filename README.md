@@ -32,11 +32,39 @@ Most retail and even semi-professional backtesting systems suffer from:
 - **Ignoring tax drag** (which can destroy many "profitable" strategies)
 
 Black Swan addresses these by:
-- Enforcing strict `t+1` execution semantics.
-- Using continuous Walk-Forward Optimization instead of global curve-fitting.
-- Stress-testing strategies across multiple adversarial Monte Carlo regimes.
+- Enforcing strict `t+1` execution semantics
+- Using continuous Walk-Forward Optimization instead of global curve-fitting
+- Stress-testing strategies across multiple adversarial Monte Carlo regimes
 - **Accurate execution modeling:** Native support for per-trade fees and slippage.
 - **Tax-Aware Outcomes:** Real-world capital gains tracking (STCG/LTCG) for US, UK, and India.
+
+---
+
+## 🧠 Design Philosophy
+
+Black Swan follows one rule:
+
+> **"Assume your strategy is wrong. Prove otherwise."**
+
+It does not:
+- Predict prices
+- Guarantee future returns
+- Optimize explicitly for best-case outcomes
+
+It does:
+- Stress-test underlying assumptions
+- Penalize fragility and drawdowns
+- Reward empirical robustness
+
+---
+
+## 👥 Intended Users
+
+- **Quant Developers** validating strategy robustness and out-of-sample stability.
+- **Researchers** studying overfitting, parameter sensitivity, and regime transitions.
+- **Systems Engineers** building automated trading frameworks requiring high-integrity validation.
+
+*Not designed for: Retail signal generation or manual discretionary trading decisions.*
 
 ---
 
@@ -60,14 +88,49 @@ LLM Summary Formulation -> User
 
 ---
 
+## ⚡ Quick Start
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/samwasted/nasiko-ai-agent
+cd nasiko-ai-agent/a2a-black-swan-agent
+
+# 2. Setup environment
+python -m venv venv
+source venv/bin/activate
+
+# 3. Install core dependencies
+pip install -r requirements.txt
+
+# 4. Set credentials
+export OPENAI_API_KEY="your_openai_api_key"
+
+# 5. Run the agent
+python -m src
+```
+
+---
+
 ## 🔬 Quantitative Engine
 
 ### Walk-Forward Optimization (WFO)
 Rather than optimizing parameters over the entire dataset, Black Swan perpetually trains and validates parameters forward through time via Optuna.
 
-- **Train/Test Windows:** Rolling out-of-sample validation.
+- **Train Window:** 6 months  
+- **Test Window:** 1 month (strictly out-of-sample)  
+- **Optimizer:** Optuna (30 trials per train window)  
+- **Objective Function:** `Sharpe - (2.0 × Max Drawdown)`
 - **Engine:** Numba-accelerated `@njit` kernels for near-C execution speeds.
 - **Costs:** Variable fees and slippage applied at each position change.
+
+### Signal Engine (Dynamic)
+Supports dynamic parameterization across standard implementations:
+- **Moving Averages:** `sma`, `ema`, `wma`, `hma`, etc.
+- **Oscillators:** `rsi`, `cci`, `mfi`, `stoch`
+- **MACD Family:** `macd`, `ppo`, `apo`
+- **Bands:** `bbands`, `kc`, `dc`
+
+*Note: All signals strictly enforce **t+1 execution lag** to eliminate lookahead bias.*
 
 ### Tax Engine (Holding-Period Aware)
 Black Swan tracks every discrete trade to determine holding duration. It applies country-specific tax regimes:
@@ -82,21 +145,40 @@ Black Swan tracks every discrete trade to determine holding duration. It applies
 Black Swan applies multiple stress regimes to the Out-of-Sample equity curve:
 
 1. **Execution Failure Simulation (Connectivity)**
-   - Randomly drops 20% of trades to simulate latency or broker disconnects.
+   - Randomly drops 20% of trades to simulate latency, broker disconnects, or extreme slippage.
 2. **Trade Order Randomization**
-   - Tests if survival was dependent on a specific historical chronological sequence.
+   - Tests if the strategy's survival was dependent on a specific historical chronological sequence.
 3. **Temporal Disorder Simulation**
-   - Shuffles market days individually to destroy trend dependency.
+   - Shuffles market days individually to destroy long-term autocorrelation and trend dependency.
 4. **Synthetic Market Generation (GBM)**
    - Generates large-scale Gaussian GBM price paths calibrated to observed volatility.
 
+> **Goal:** Detect fragility, not optimize returns.
+
 ---
 
-## 🚀 Usage (A2A Confirmation Flow)
+## ⚡ Performance Characteristics
 
-Black Swan requires a two-step confirmation for institutional safety.
+| Factor | Impact |
+|--------|--------|
+| **WFO + Optuna** | High CPU thread saturation during Train blocks. |
+| **Monte Carlo Labs** | High execution latency (15–30 seconds to return response). |
+| **yFinance API** | Dependent on unofficial endpoints, subject to rate-limiting. |
+| **Numba JIT**    | Very fast simulation loop, but incurs a ~3-second compilation hit on first startup. |
+
+### Modeling Assumptions
+
+To isolate structural robustness, the current engine:
+- **Full Capital Allocation:** Assumes unweighted 100% allocations (no position sizing) to expose pure strategy volatility.
+
+---
+
+## 🚀 Example Usage (A2A Confirmation Flow)
+
+Because Black Swan is a headless A2A logic engine with built-in financial safeguards, it uses a mandatory two-step confirmation process. 
 
 **1. Initial Request:**
+Pass dynamic array boundaries and explicitly request custom fees, slippage, and tax regimes.
 ```bash
 curl -X POST http://localhost:5000/ \
 -H "Content-Type: application/json" \
@@ -110,16 +192,17 @@ curl -X POST http://localhost:5000/ \
       "timestamp": "2026-03-29T00:00:00Z",
       "role": "user",
       "parts": [{
-        "text": "Run a 2y SMA suite on AAPL. Apply 0.1% fees and Indian tax regime."
+        "text": "Run a robustness suite for an SMA strategy on BTC-USD. Use a 2y period. Optimize the fast_period between 5 and 20, and the slow_period between 21 and 100. Assume 0.1% fees, 0.05% slippage, and apply the US tax regime."
       }]
     }
   }
 }'
 ```
 
-**2. Confirmation (Reply 'yes' with contextId):**
-The agent will present a summary of the execution costs. Reply "yes" mapped to the new contextId to trigger the compute-intensive Numba simulation.
+The agent will respond with a breakdown of execution parameters and ask "Proceed? (yes/no)". You will also receive a `contextId` in the JSON response.
 
+**2. Confirmation (Reply 'yes'):**
+Take the `contextId` from the previous response and reply "yes" to push the strategy into the Numba WFO engine.
 ```bash
 curl -X POST http://localhost:5000/ \
 -H "Content-Type: application/json" \
@@ -139,6 +222,25 @@ curl -X POST http://localhost:5000/ \
     }
   }
 }'
+```
+
+### Sample Response Snippet (Data Payload)
+
+```json
+{
+  "ticker": "BTC-USD",
+  "oos_metrics": {
+    "cagr": 0.184,
+    "max_drawdown": 0.271,
+    "sharpe": 1.12
+  },
+  "monte_carlo": {
+    "connectivity_avg": 0.112,
+    "worst_case_var95": -0.354,
+    "gbm_fail_rate": "12.5%"
+  },
+  "analytical_narrative": "Strategy displays strong autocorrelation resistance..."
+}
 ```
 
 ---
