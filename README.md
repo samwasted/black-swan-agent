@@ -268,8 +268,6 @@ To isolate structural robustness, the current engine:
 
 ---
 
-## 🚀 Example Usage
-
 ## 🚀 Example Usage (A2A Confirmation Flow)
 
 Because Black Swan is a headless A2A logic engine with built-in financial safeguards, it uses a mandatory two-step confirmation process. 
